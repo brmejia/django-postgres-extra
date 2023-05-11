@@ -35,6 +35,15 @@ Explore the documentation to learn about all features:
 
    Support for ``TRUNCATE TABLE`` statements (including cascading).
 
+* :ref:`Locking models & tables <locking_page>`
+
+   Support for explicit table-level locks.
+
+
+* :ref:`Creating/dropping schemas <schemas_page>`
+
+    Support for managing Postgres schemas.
+
 
 .. toctree::
    :maxdepth: 2
@@ -49,6 +58,8 @@ Explore the documentation to learn about all features:
    table_partitioning
    expressions
    annotations
+   locking
+   schemas
    settings
    api_reference
    major_releases

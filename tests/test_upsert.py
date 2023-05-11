@@ -7,6 +7,7 @@ from django.db.models.expressions import CombinedExpression, Value
 
 from psqlextra.expressions import ExcludedCol
 from psqlextra.fields import HStoreField
+from psqlextra.query import ConflictAction
 
 from .fake_model import get_fake_model
 
@@ -80,6 +81,22 @@ def test_upsert_explicit_pk():
     assert obj1.cookies == "second-boo"
     assert obj2.name == "the-object"
     assert obj2.cookies == "second-boo"
+
+
+def test_upsert_one_to_one_field():
+    model1 = get_fake_model({"title": models.TextField(unique=True)})
+    model2 = get_fake_model(
+        {"model1": models.OneToOneField(model1, on_delete=models.CASCADE)}
+    )
+
+    obj1 = model1.objects.create(title="hello world")
+
+    obj2_id = model2.objects.upsert(
+        conflict_target=["model1"], fields=dict(model1=obj1)
+    )
+
+    obj2 = model2.objects.get(id=obj2_id)
+    assert obj2.model1 == obj1
 
 
 def test_upsert_with_update_condition():
@@ -229,9 +246,17 @@ def test_upsert_bulk_no_rows():
         {"name": models.CharField(max_length=255, null=True, unique=True)}
     )
 
+    model.objects.on_conflict(ConflictAction.UPDATE, ["name"]).bulk_insert(
+        rows=[]
+    )
+
     model.objects.bulk_upsert(conflict_target=["name"], rows=[])
 
     model.objects.bulk_upsert(conflict_target=["name"], rows=None)
+
+    model.objects.on_conflict(ConflictAction.UPDATE, ["name"]).bulk_insert(
+        rows=None
+    )
 
 
 def test_bulk_upsert_return_models():

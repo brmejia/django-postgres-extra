@@ -1,19 +1,43 @@
 from collections import OrderedDict
 from itertools import chain
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from django.core.exceptions import SuspiciousOperation
 from django.db import connections, models, router
-from django.db.models import Expression, Q
+from django.db.models import Expression, Q, QuerySet
 from django.db.models.fields import NOT_PROVIDED
 
 from .sql import PostgresInsertQuery, PostgresQuery
 from .types import ConflictAction
 
-ConflictTarget = List[Union[str, Tuple[str]]]
+if TYPE_CHECKING:
+    from django.db.models.constraints import BaseConstraint
+    from django.db.models.indexes import Index
+
+ConflictTarget = Union[List[Union[str, Tuple[str]]], "BaseConstraint", "Index"]
 
 
-class PostgresQuerySet(models.QuerySet):
+TModel = TypeVar("TModel", bound=models.Model, covariant=True)
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
+    QuerySetBase = QuerySet[TModel]
+else:
+    QuerySetBase = QuerySet
+
+
+class PostgresQuerySet(QuerySetBase, Generic[TModel]):
     """Adds support for PostgreSQL specifics."""
 
     def __init__(self, model=None, query=None, using=None, hints=None):
@@ -28,7 +52,7 @@ class PostgresQuerySet(models.QuerySet):
         self.conflict_update_condition = None
         self.index_predicate = None
 
-    def annotate(self, **annotations):
+    def annotate(self, **annotations) -> "Self":  # type: ignore[valid-type, override]
         """Custom version of the standard annotate function that allows using
         field names as annotated fields.
 
@@ -112,7 +136,7 @@ class PostgresQuerySet(models.QuerySet):
 
     def bulk_insert(
         self,
-        rows: List[dict],
+        rows: Iterable[dict],
         return_model: bool = False,
         using: Optional[str] = None,
     ):
@@ -131,13 +155,19 @@ class PostgresQuerySet(models.QuerySet):
                 just dicts.
 
             using:
-                Name of the database connection to use for
+                Optional name of the database connection to use for
                 this query.
 
         Returns:
             A list of either the dicts of the rows inserted, including the pk or
             the models of the rows inserted with defaults for any fields not specified
         """
+
+        def is_empty(r):
+            return all([False for _ in r])
+
+        if not rows or is_empty(rows):
+            return []
 
         if not self.conflict_target and not self.conflict_action:
             # no special action required, use the standard Django bulk_create(..)
@@ -196,11 +226,14 @@ class PostgresQuerySet(models.QuerySet):
             compiler = self._build_insert_compiler([fields], using=using)
             rows = compiler.execute_sql(return_id=True)
 
-            pk_field_name = self.model._meta.pk.name
+            if not self.model or not self.model.pk:
+                return None
+
+            _, pk_db_column = self.model._meta.pk.get_attname_column()  # type: ignore[union-attr]
             if not rows or len(rows) == 0:
                 return None
 
-            return rows[0][pk_field_name]
+            return rows[0][pk_db_column]
 
         # no special action required, use the standard Django create(..)
         return super().create(**fields).pk
@@ -239,7 +272,7 @@ class PostgresQuerySet(models.QuerySet):
         # preserve the fact that the attribute name
         # might be different than the database column name
         model_columns = {}
-        for field in self.model._meta.local_concrete_fields:
+        for field in self.model._meta.local_concrete_fields:  # type: ignore[attr-defined]
             model_columns[field.column] = field.attname
 
         # strip out any columns/fields returned by the db that
@@ -292,7 +325,9 @@ class PostgresQuerySet(models.QuerySet):
             index_predicate=index_predicate,
             update_condition=update_condition,
         )
-        return self.insert(**fields, using=using)
+
+        kwargs = {**fields, "using": using}
+        return self.insert(**kwargs)
 
     def upsert_and_get(
         self,
@@ -334,7 +369,9 @@ class PostgresQuerySet(models.QuerySet):
             index_predicate=index_predicate,
             update_condition=update_condition,
         )
-        return self.insert_and_get(**fields, using=using)
+
+        kwargs = {**fields, "using": using}
+        return self.insert_and_get(**kwargs)
 
     def bulk_upsert(
         self,
@@ -375,12 +412,6 @@ class PostgresQuerySet(models.QuerySet):
             the models of the rows upserted
         """
 
-        def is_empty(r):
-            return all([False for _ in r])
-
-        if not rows or is_empty(rows):
-            return []
-
         self.on_conflict(
             conflict_target,
             ConflictAction.UPDATE,
@@ -403,7 +434,7 @@ class PostgresQuerySet(models.QuerySet):
         if apply_converters:
             connection = connections[using]
 
-            for field in self.model._meta.local_concrete_fields:
+            for field in self.model._meta.local_concrete_fields:  # type: ignore[attr-defined]
                 if field.attname not in converted_field_values:
                     continue
 
@@ -447,7 +478,7 @@ class PostgresQuerySet(models.QuerySet):
 
         # ask the db router which connection to use
         using = (
-            using or self._db or router.db_for_write(self.model, **self._hints)
+            using or self._db or router.db_for_write(self.model, **self._hints)  # type: ignore[attr-defined]
         )
 
         # create model objects, we also have to detect cases

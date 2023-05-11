@@ -71,25 +71,25 @@ def append_caller_to_sql(sql):
         return sql
 
 
-class SQLCompiler(django_compiler.SQLCompiler):
+class SQLCompiler(django_compiler.SQLCompiler):  # type: ignore [attr-defined]
     def as_sql(self, *args, **kwargs):
         sql, params = super().as_sql(*args, **kwargs)
         return append_caller_to_sql(sql), params
 
 
-class SQLDeleteCompiler(django_compiler.SQLDeleteCompiler):
+class SQLDeleteCompiler(django_compiler.SQLDeleteCompiler):  # type: ignore [name-defined]
     def as_sql(self, *args, **kwargs):
         sql, params = super().as_sql(*args, **kwargs)
         return append_caller_to_sql(sql), params
 
 
-class SQLAggregateCompiler(django_compiler.SQLAggregateCompiler):
+class SQLAggregateCompiler(django_compiler.SQLAggregateCompiler):  # type: ignore [name-defined]
     def as_sql(self, *args, **kwargs):
         sql, params = super().as_sql(*args, **kwargs)
         return append_caller_to_sql(sql), params
 
 
-class SQLUpdateCompiler(django_compiler.SQLUpdateCompiler):
+class SQLUpdateCompiler(django_compiler.SQLUpdateCompiler):  # type: ignore [name-defined]
     """Compiler for SQL UPDATE statements that allows us to use expressions
     inside HStore values.
 
@@ -146,7 +146,7 @@ class SQLUpdateCompiler(django_compiler.SQLUpdateCompiler):
         return False
 
 
-class SQLInsertCompiler(django_compiler.SQLInsertCompiler):
+class SQLInsertCompiler(django_compiler.SQLInsertCompiler):  # type: ignore [name-defined]
     """Compiler for SQL INSERT statements."""
 
     def as_sql(self, *args, **kwargs):
@@ -159,7 +159,7 @@ class SQLInsertCompiler(django_compiler.SQLInsertCompiler):
         return queries
 
 
-class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):
+class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):  # type: ignore [name-defined]
     """Compiler for SQL INSERT statements."""
 
     def __init__(self, *args, **kwargs):
@@ -187,12 +187,13 @@ class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):
                     rows.extend(cursor.fetchall())
                 except ProgrammingError:
                     pass
+            description = cursor.description
 
         # create a mapping between column names and column value
         return [
             {
                 column.name: row[column_index]
-                for column_index, column in enumerate(cursor.description)
+                for column_index, column in enumerate(description)
                 if row
             }
             for row in rows
@@ -236,17 +237,17 @@ class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):
         update_columns = ", ".join(
             [
                 "{0} = EXCLUDED.{0}".format(self.qn(field.column))
-                for field in self.query.update_fields
+                for field in self.query.update_fields  # type: ignore[attr-defined]
             ]
         )
 
         # build the conflict target, the columns to watch
         # for conflicts
-        conflict_target = self._build_conflict_target()
-        index_predicate = self.query.index_predicate
-        update_condition = self.query.conflict_update_condition
+        on_conflict_clause = self._build_on_conflict_clause()
+        index_predicate = self.query.index_predicate  # type: ignore[attr-defined]
+        update_condition = self.query.conflict_update_condition  # type: ignore[attr-defined]
 
-        rewritten_sql = f"{sql} ON CONFLICT {conflict_target}"
+        rewritten_sql = f"{sql} {on_conflict_clause}"
 
         if index_predicate:
             expr_sql, expr_params = self._compile_expression(index_predicate)
@@ -268,6 +269,21 @@ class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):
         rewritten_sql += f" RETURNING {returning}"
 
         return (rewritten_sql, params)
+
+    def _build_on_conflict_clause(self):
+        if django.VERSION >= (2, 2):
+            from django.db.models.constraints import BaseConstraint
+            from django.db.models.indexes import Index
+
+            if isinstance(
+                self.query.conflict_target, BaseConstraint
+            ) or isinstance(self.query.conflict_target, Index):
+                return "ON CONFLICT ON CONSTRAINT %s" % self.qn(
+                    self.query.conflict_target.name
+                )
+
+        conflict_target = self._build_conflict_target()
+        return f"ON CONFLICT {conflict_target}"
 
     def _build_conflict_target(self):
         """Builds the `conflict_target` for the ON CONFLICT clause."""
@@ -354,12 +370,15 @@ class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):
 
         field_name = self._normalize_field_name(name)
 
+        if not self.query.model:
+            return None
+
         # 'pk' has special meaning and always refers to the primary
         # key of a model, we have to respect this de-facto standard behaviour
         if field_name == "pk" and self.query.model._meta.pk:
             return self.query.model._meta.pk
 
-        for field in self.query.model._meta.local_concrete_fields:
+        for field in self.query.model._meta.local_concrete_fields:  # type: ignore[attr-defined]
             if field.name == field_name or field.column == field_name:
                 return field
 
@@ -401,7 +420,7 @@ class PostgresInsertOnConflictCompiler(django_compiler.SQLInsertCompiler):
         if isinstance(field, RelatedField) and isinstance(value, Model):
             value = value.pk
 
-        return django_compiler.SQLInsertCompiler.prepare_value(
+        return django_compiler.SQLInsertCompiler.prepare_value(  # type: ignore[attr-defined]
             self,
             field,
             # Note: this deliberately doesn't use `pre_save_val` as we don't

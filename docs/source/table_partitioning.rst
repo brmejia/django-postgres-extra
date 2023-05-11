@@ -101,7 +101,7 @@ Command-line options
   Long flag            Short flag    Default          Description
  ==================== ============= ================ ==================================================================================================== === === === === === ===
   ``--yes``            ``-y``        ``False``        Specifies yes to all questions. You will NOT be asked for confirmation before partition deletion.
-  ``--using``          ``-u``        ``'default'``    Name of the database connection to use.
+  ``--using``          ``-u``        ``'default'``    Optional name of the database connection to use.
   ``--skip-create``                  ``False``        Whether to skip creating partitions.
   ``--skip-delete``                  ``False``        Whether to skip deleting partitions.
 
@@ -196,7 +196,7 @@ You can look at :class:`psqlextra.partitioning.PostgresCurrentTimePartitioningSt
 Manually managing partitions
 ----------------------------
 
-If you are using list or has partitioning, you most likely have a fixed amount of partitions that can be created up front using migrations or using the schema editor.
+If you are using list or hash partitioning, you most likely have a fixed amount of partitions that can be created up front using migrations or using the schema editor.
 
 Using migration operations
 **************************

@@ -40,6 +40,7 @@ setup(
     name="django-postgres-extra",
     version=__version__,
     packages=find_packages(exclude=["tests"]),
+    package_data={"psqlextra": ["py.typed"]},
     include_package_data=True,
     license="MIT License",
     description="Bringing all of PostgreSQL's awesomeness to Django.",
@@ -90,6 +91,15 @@ setup(
             "autopep8==1.6.0",
             "isort==5.10.0",
             "docformatter==1.4",
+            "mypy==1.2.0; python_version > '3.6'",
+            "mypy==0.971; python_version <= '3.6'",
+            "django-stubs==1.16.0; python_version > '3.6'",
+            "django-stubs==1.9.0; python_version <= '3.6'",
+            "typing-extensions==4.5.0; python_version > '3.6'",
+            "typing-extensions==4.1.0; python_version <= '3.6'",
+            "types-dj-database-url==1.3.0.0",
+            "types-psycopg2==2.9.21.9",
+            "types-python-dateutil==2.8.19.12",
         ],
         "publish": [
             "build==0.7.0",
@@ -122,6 +132,18 @@ setup(
                     "tests",
                 ],
                 ["autopep8", "-i", "-r", "setup.py", "psqlextra", "tests"],
+            ],
+        ),
+        "lint_types": create_command(
+            "Type-checks the code",
+            [
+                [
+                    "mypy",
+                    "--package",
+                    "psqlextra",
+                    "--pretty",
+                    "--show-error-codes",
+                ],
             ],
         ),
         "format": create_command(
@@ -162,6 +184,7 @@ setup(
                 ["python", "setup.py", "sort_imports"],
                 ["python", "setup.py", "lint_fix"],
                 ["python", "setup.py", "lint"],
+                ["python", "setup.py", "lint_types"],
             ],
         ),
         "verify": create_command(
@@ -171,6 +194,7 @@ setup(
                 ["python", "setup.py", "format_docstrings_verify"],
                 ["python", "setup.py", "sort_imports_verify"],
                 ["python", "setup.py", "lint"],
+                ["python", "setup.py", "lint_types"],
             ],
         ),
         "test": create_command(
